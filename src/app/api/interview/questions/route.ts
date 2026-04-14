@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { chatLlm } from "@/lib/llm";
 import { createClient } from "@/lib/supabase/server";
 import { sampleJobs } from "@/lib/sampleJobs";
 
@@ -27,18 +27,12 @@ export async function POST(request: Request) {
       .eq("id", user.id)
       .single();
 
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-
     const profileInfo = profile
       ? `スキル: ${(profile.skills ?? []).join(", ")}, 経験年数: ${profile.experience_years}年, 希望職種: ${profile.desired_role}`
       : "プロフィール未登録";
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250514",
-      max_tokens: 2048,
-      messages: [
+    const text = await chatLlm(
+      [
         {
           role: "user",
           content: `以下の求人に対する面接で聞かれそうな質問を10個、日本語で生成してください。
@@ -54,10 +48,8 @@ export async function POST(request: Request) {
 [{"question":"質問文","category":"カテゴリ（自己紹介/志望動機/技術/行動/逆質問）","tips":"回答のポイント"}]`,
         },
       ],
-    });
-
-    const text =
-      response.content[0].type === "text" ? response.content[0].text : "[]";
+      2048,
+    );
 
     let questions: Array<{
       question: string;

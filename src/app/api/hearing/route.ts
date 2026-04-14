@@ -1,28 +1,30 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { chatLlm } from "@/lib/llm";
 import { createClient } from "@/lib/supabase/server";
 import type { ChatMessage, ProfileData, Json } from "@/types/database";
 
-const SYSTEM_PROMPT = `あなたは転職カウンセラーです。以下の情報を自然な会話を通じて収集してください:
-- 年齢
-- 職歴・現在の仕事
-- スキル（プログラミング言語、ツール、資格など）
-- 経験年数
-- 希望年収
-- 希望勤務地
-- 希望職種
-- 仕事に対する価値観（ワークライフバランス、成長性、安定性など）
+const SYSTEM_PROMPT = `あなたは転職カウンセラーです。ユーザーから以下の情報を集めてください:
+1. 現在の仕事（職種・業界・経験年数）
+2. スキルや資格
+3. 希望年収
+4. 希望勤務地
+5. 仕事の価値観
 
-聞き方のルール:
-1. 一度に複数の質問をしない。1つずつ自然に聞く。
-2. 相手の回答に共感を示してから次の質問に移る。
-3. 全ての情報が十分に集まったと判断したら、「ありがとうございます！お話を整理しますね。」と伝えた上で、会話の最後に以下のJSON形式で構造化データを出力してください:
+【最重要ルール】
+- ユーザーの最初のメッセージで上記5項目のうち4つ以上わかれば、追加質問せず即座にJSON出力すること。
+- 不足項目は「不明」「未定」で埋めてよい。完璧を求めない。
+- 年齢は聞かない（常にnull）。希望職種が不明なら「未定」。
+
+【会話ルール】
+- 不足が2つ以上ある場合のみ質問する。質問は1回にまとめる。
+- 最大3往復で必ず終了。3往復を超えたら未回答項目は推測か「不明」で埋めてJSON出力。
+- 完了時は「お話を整理しますね。」と一言添えてJSON出力:
 
 \`\`\`json
-{"profile":{"age":数値,"skills":["スキル1","スキル2"],"experience_years":数値,"desired_salary":"希望年収","desired_location":"希望勤務地","desired_role":"希望職種","values":"価値観の要約"}}
+{"profile":{"age":null,"skills":["スキル1"],"experience_years":数値,"desired_salary":"希望年収","desired_location":"勤務地","desired_role":"希望職種","values":"価値観"}}
 \`\`\`
 
-まだ情報が不十分な場合はJSONを出力せず、会話を続けてください。`;
+繰り返す: 情報が十分ならば1往復目でJSON出力して終了。余計な質問は禁止。`;
 
 function extractProfile(text: string): ProfileData | null {
   const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
@@ -55,22 +57,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250514",
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    });
-
-    const reply =
-      response.content[0].type === "text" ? response.content[0].text : "";
+    const reply = await chatLlm(
+      [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...messages.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+      ],
+      512,
+    );
 
     // プロフィール抽出を試みる
     const profile = extractProfile(reply);

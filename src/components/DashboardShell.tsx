@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const navItems = [
+  { href: "/profile", label: "プロフィール" },
+  { href: "/profile/upload", label: "履歴書アップロード" },
   { href: "/hearing", label: "ヒアリング" },
   { href: "/jobs", label: "求人一覧" },
   { href: "/documents", label: "書類作成" },

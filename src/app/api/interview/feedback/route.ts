@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { chatLlm } from "@/lib/llm";
 import { createClient } from "@/lib/supabase/server";
 import type { ChatMessage } from "@/types/database";
 
@@ -17,28 +17,25 @@ export async function POST(request: Request) {
     const body: { messages: ChatMessage[]; jobTitle: string } =
       await request.json();
 
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250514",
-      max_tokens: 1024,
-      system: `あなたは面接官ロールプレイのAIです。「${body.jobTitle}」の面接官として振る舞ってください。
+    const reply = await chatLlm(
+      [
+        {
+          role: "system",
+          content: `あなたは面接官ロールプレイのAIです。「${body.jobTitle}」の面接官として振る舞ってください。
 ルール:
 1. 候補者の回答に対して具体的なフィードバックを提供する
 2. 良い点と改善点を明確に分ける
 3. より良い回答例があれば提案する
 4. 次の質問に自然に移る
 5. 日本語で会話する`,
-      messages: body.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    });
-
-    const reply =
-      response.content[0].type === "text" ? response.content[0].text : "";
+        },
+        ...body.messages.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+      ],
+      1024,
+    );
 
     return NextResponse.json({ reply });
   } catch (error) {

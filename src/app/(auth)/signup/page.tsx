@@ -33,7 +33,10 @@ export default function SignupPage() {
         return;
       }
 
-      setSuccess(true);
+      // サインアップ成功 → プロフィール登録へ
+      router.push("/profile");
+      router.refresh();
+      return;
     } catch {
       setError("登録に失敗しました。");
     } finally {

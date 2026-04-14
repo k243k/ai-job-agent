@@ -29,7 +29,12 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/hearing");
+      // プロフィールがあればダッシュボード、なければプロフィール登録
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .single();
+      router.push(profile ? "/jobs" : "/profile");
       router.refresh();
     } catch {
       setError("ログインに失敗しました。");
