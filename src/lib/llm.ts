@@ -9,6 +9,8 @@
 const LLM_PROVIDER = process.env.LLM_PROVIDER ?? "ollama";
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "gemma3:4b";
+const GROQ_API_KEY = process.env.GROQ_API_KEY ?? "";
+const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
 
 interface LlmMessage {
   role: "system" | "user" | "assistant";
@@ -42,6 +44,36 @@ async function callOllama(messages: LlmMessage[], maxTokens: number): Promise<Ll
   // Qwen 3.5等の思考タグ <think>...</think> を除去
   const cleaned = data.message.content.replace(/<think>[\s\S]*?<\/think>\s*/g, "").trim();
   return { text: cleaned };
+}
+
+async function callGroq(messages: LlmMessage[], maxTokens: number): Promise<LlmResponse> {
+  if (!GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY が設定されていません");
+  }
+
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      max_tokens: maxTokens,
+      temperature: 0.4,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Groq API error: HTTP ${response.status}`);
+  }
+
+  const data = (await response.json()) as {
+    choices: Array<{ message: { content: string } }>;
+  };
+  const text = data.choices[0]?.message?.content ?? "";
+  return { text };
 }
 
 async function callAnthropic(messages: LlmMessage[], maxTokens: number): Promise<LlmResponse> {
@@ -90,9 +122,16 @@ export async function chatLlm(
   messages: LlmMessage[],
   maxTokens: number = 2048
 ): Promise<string> {
-  const result =
-    LLM_PROVIDER === "anthropic"
-      ? await callAnthropic(messages, maxTokens)
-      : await callOllama(messages, maxTokens);
+  let result: LlmResponse;
+  switch (LLM_PROVIDER) {
+    case "anthropic":
+      result = await callAnthropic(messages, maxTokens);
+      break;
+    case "groq":
+      result = await callGroq(messages, maxTokens);
+      break;
+    default:
+      result = await callOllama(messages, maxTokens);
+  }
   return result.text;
 }

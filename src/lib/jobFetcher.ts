@@ -8,7 +8,7 @@
  */
 import type { Job } from "@/types/database";
 
-const API_BASE = "http://public.api.careerjet.net/search";
+const API_BASE = "https://public.api.careerjet.net/search";
 const API_TIMEOUT_MS = 15_000;
 const AFFID = process.env.CAREERJET_AFFID ?? "test";
 
