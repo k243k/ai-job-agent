@@ -1,11 +1,9 @@
 import CopyPlugin from "copy-webpack-plugin";
-import path from "path";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["pdf-parse"],
-    // Vercelでフォントファイルをサーバーレス関数にバンドルする
     outputFileTracingIncludes: {
       "/api/documents/pdf": ["./public/fonts/**/*"],
     },
@@ -22,14 +20,14 @@ const nextConfig = {
         buffer: false,
       };
     }
-    // PDFKit の AFM フォントデータをサーバーバンドルに含める
+    // PDFKit の AFM フォントデータを各API Routeのチャンク出力先にコピー
     if (isServer) {
       config.plugins.push(
         new CopyPlugin({
           patterns: [
             {
               from: "node_modules/pdfkit/js/data",
-              to: path.join(config.output.path, "data"),
+              to: "app/api/documents/pdf/data",
             },
           ],
         })
