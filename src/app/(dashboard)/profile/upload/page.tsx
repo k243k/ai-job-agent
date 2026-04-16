@@ -329,8 +329,14 @@ export default function ProfileUploadPage() {
           </p>
           <div className="flex gap-3 justify-center">
             <Link
-              href="/jobs"
+              href="/profile"
               className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
+            >
+              プロフィールを確認
+            </Link>
+            <Link
+              href="/jobs"
+              className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-medium"
             >
               求人を探す
             </Link>
