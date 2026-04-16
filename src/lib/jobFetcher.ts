@@ -1,101 +1,84 @@
 /**
- * Careerjet API経由で日本の求人情報を取得するモジュール。
+ * Green (green-japan.com) から求人情報を取得するモジュール。
  *
- * Careerjet: 無料の求人アグリゲーターAPI。登録不要、日本語対応。
- * https://www.careerjet.net/partners/api/
+ * GreenはNext.jsで構築されており、__NEXT_DATA__に求人JSONが含まれる。
+ * サーバーサイドfetch + JSONパースで取得可能（Playwright不要）。
  *
  * 取得失敗時はsampleJobsにフォールバックする。
  */
 import type { Job } from "@/types/database";
 
-const API_BASE = "https://public.api.careerjet.net/search";
-const API_TIMEOUT_MS = 15_000;
-const AFFID = process.env.CAREERJET_AFFID ?? "test";
+const FETCH_TIMEOUT_MS = 15_000;
+const GREEN_BASE = "https://www.green-japan.com";
 
-/** HTMLタグを除去しアンエスケープする */
-const stripHtml = (html: string): string =>
-  html
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    .trim();
-
-/** URLから安定的なIDを生成 */
-const generateId = (url: string): string => {
-  const hash = Array.from(url).reduce(
-    (acc, char) => ((acc << 5) - acc + char.charCodeAt(0)) | 0,
-    0
-  );
-  const hex = Math.abs(hash).toString(16).padStart(8, "0");
-  return `cj-${hex}`;
-};
-
-/** 給与情報を読みやすい文字列に変換 */
-const formatSalary = (job: CareerjetJob): string | null => {
-  if (!job.salary) return null;
-  return job.salary;
-};
-
-interface CareerjetJob {
-  title: string;
-  description: string;
-  url: string;
-  locations: string;
-  company: string;
-  salary: string;
-  salary_min: string;
-  salary_max: string;
-  salary_type: string; // H=hourly, M=monthly, Y=yearly
-  salary_currency_code: string;
-  date: string;
-  site: string;
+interface GreenCompany {
+  id: number;
+  name: string;
+  title?: string;
 }
 
-interface CareerjetResponse {
-  type: string;
-  error?: string;
-  hits: number;
-  pages: number;
-  response_time: number;
-  jobs: CareerjetJob[];
+interface GreenJobOffer {
+  id: number;
+  name: string;
+  company: GreenCompany;
+  salary: string;
+  areaName: string;
+  skillNames: string[];
+  jobOfferUrl: string;
+  employeesNumber?: number;
+  establishedYear?: string;
+}
+
+interface GreenNextData {
+  props: {
+    pageProps: {
+      defaultSearchJobOfferData: {
+        jobOffers: GreenJobOffer[];
+        totalJobOfferCount?: number;
+      };
+    };
+  };
 }
 
 export interface FetchAllResult {
   jobs: Job[];
   sources: {
-    careerjet: { count: number; error?: string };
+    green: { count: number; error?: string };
   };
   usedFallback: boolean;
 }
 
 /**
- * Careerjet APIから日本の求人を取得する。
+ * GreenのHTML内の __NEXT_DATA__ からJSONを抽出する
+ */
+function extractNextData(html: string): GreenNextData | null {
+  const match = html.match(/__NEXT_DATA__[^{]*([\s\S]*?)<\/script>/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[1]) as GreenNextData;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Green (green-japan.com) から求人を取得する。
  */
 export const fetchAllJobs = async (
   keyword: string,
   location: string = "東京都"
 ): Promise<FetchAllResult> => {
-  const params = new URLSearchParams({
-    locale_code: "ja_JP",
-    keywords: keyword,
-    location,
-    affid: AFFID,
-    user_ip: "1.0.0.1", // サーバーサイド呼び出し用のダミーIP
-    user_agent: "AIJobAgent/1.0",
-    pagesize: "30",
-    page: "1",
-  });
+  const params = new URLSearchParams({ keyword });
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-    const response = await fetch(`${API_BASE}?${params}`, {
-      headers: { Referer: process.env.NEXT_PUBLIC_APP_URL ?? "https://example.com" },
+    const response = await fetch(`${GREEN_BASE}/search?${params}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; AIJobAgent/1.0)",
+        Accept: "text/html",
+      },
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -104,38 +87,53 @@ export const fetchAllJobs = async (
       throw new Error(`HTTP ${response.status}`);
     }
 
-    const data = (await response.json()) as CareerjetResponse;
+    const html = await response.text();
+    const nextData = extractNextData(html);
 
-    if (data.type === "ERROR" || data.error) {
-      throw new Error(data.error ?? "Careerjet API error");
+    if (!nextData) {
+      throw new Error("__NEXT_DATA__ が見つかりません");
     }
 
-    const jobs: Job[] = (data.jobs ?? []).map((cj) => ({
-      id: generateId(cj.url),
-      title: stripHtml(cj.title),
-      company: cj.company || "",
-      description: stripHtml(cj.description).slice(0, 500),
-      location: cj.locations || location,
-      salary: formatSalary(cj),
-      url: cj.url,
-      source: "careerjet",
-      created_at: cj.date || new Date().toISOString(),
+    const greenJobs =
+      nextData.props.pageProps.defaultSearchJobOfferData.jobOffers;
+
+    const jobs: Job[] = greenJobs.map((gj) => ({
+      id: `green-${gj.id}`,
+      title: gj.name,
+      company: gj.company.name,
+      description: [
+        gj.skillNames.length > 0
+          ? `スキル: ${gj.skillNames.join(", ")}`
+          : "",
+        gj.employeesNumber
+          ? `従業員数: ${gj.employeesNumber}名`
+          : "",
+        gj.establishedYear ? `設立: ${gj.establishedYear}` : "",
+        gj.company.title ?? "",
+      ]
+        .filter(Boolean)
+        .join(" / "),
+      location: gj.areaName || location,
+      salary: gj.salary || null,
+      url: `${GREEN_BASE}${gj.jobOfferUrl}`,
+      source: "green",
+      created_at: new Date().toISOString(),
     }));
 
     return {
       jobs,
       sources: {
-        careerjet: { count: jobs.length },
+        green: { count: jobs.length },
       },
       usedFallback: false,
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[jobFetcher] Careerjet API取得エラー: ${message}`);
+    console.error(`[jobFetcher] Green取得エラー: ${message}`);
     return {
       jobs: [],
       sources: {
-        careerjet: { count: 0, error: message },
+        green: { count: 0, error: message },
       },
       usedFallback: true,
     };
