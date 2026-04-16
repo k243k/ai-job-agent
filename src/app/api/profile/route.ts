@@ -35,7 +35,13 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ profile: profile ?? null });
+    if (!profile) {
+      return NextResponse.json({ profile: null });
+    }
+
+    // レスポンスからUUIDを除外（クライアントに返す必要なし）
+    const { id: _id, ...safeProfile } = profile;
+    return NextResponse.json({ profile: safeProfile });
   } catch (error) {
     console.error("Profile GET error:", error);
     return NextResponse.json(
