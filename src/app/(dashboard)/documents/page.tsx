@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
+import ReactMarkdown from "react-markdown";
 import type { DocType } from "@/types/database";
 
 const PdfDownloadButton = dynamic(
@@ -41,6 +42,7 @@ export default function DocumentsPage() {
   const [savedDocuments, setSavedDocuments] = useState<SavedDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"edit" | "preview">("preview");
 
   /** 保存済み書類一覧を取得 */
   const fetchDocuments = useCallback(async () => {
@@ -243,9 +245,35 @@ export default function DocumentsPage() {
       {generated && (
         <div className="bg-white rounded-xl shadow-sm border p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              プレビュー・編集
-            </h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                書類
+              </h2>
+              <div className="flex bg-gray-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setViewMode("preview")}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === "preview"
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                  type="button"
+                >
+                  プレビュー
+                </button>
+                <button
+                  onClick={() => setViewMode("edit")}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === "edit"
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                  type="button"
+                >
+                  編集
+                </button>
+              </div>
+            </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={handleSave}
@@ -258,11 +286,17 @@ export default function DocumentsPage() {
               <PdfDownloadButton content={content} docType={selectedDocType} />
             </div>
           </div>
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="w-full h-96 px-4 py-3 border border-gray-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-          />
+          {viewMode === "edit" ? (
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="w-full h-96 px-4 py-3 border border-gray-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+            />
+          ) : (
+            <div className="w-full min-h-96 px-6 py-4 border border-gray-300 rounded-lg bg-white overflow-y-auto prose prose-sm max-w-none prose-headings:text-gray-900 prose-h2:text-lg prose-h2:border-b prose-h2:border-gray-200 prose-h2:pb-2 prose-h2:mb-3 prose-h3:text-base prose-ul:my-1 prose-li:my-0.5">
+              <ReactMarkdown>{content}</ReactMarkdown>
+            </div>
+          )}
         </div>
       )}
     </div>
