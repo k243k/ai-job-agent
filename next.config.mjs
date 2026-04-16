@@ -1,9 +1,14 @@
 import CopyPlugin from "copy-webpack-plugin";
+import path from "path";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["pdf-parse"],
+    // Vercelでフォントファイルをサーバーレス関数にバンドルする
+    outputFileTracingIncludes: {
+      "/api/documents/pdf": ["./public/fonts/**/*"],
+    },
   },
   webpack: (config, { isServer }) => {
     // @react-pdf/renderer はクライアントのみで使用。
@@ -17,14 +22,14 @@ const nextConfig = {
         buffer: false,
       };
     }
-    // PDFKit の AFM フォントデータをバンドルに含める
+    // PDFKit の AFM フォントデータをサーバーバンドルに含める
     if (isServer) {
       config.plugins.push(
         new CopyPlugin({
           patterns: [
             {
               from: "node_modules/pdfkit/js/data",
-              to: "vendor-chunks/data",
+              to: path.join(config.output.path, "data"),
             },
           ],
         })
