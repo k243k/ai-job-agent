@@ -63,12 +63,18 @@ export default function DocumentsPage() {
     void fetchDocuments();
   }, [fetchDocuments]);
 
+  const [missingInfo, setMissingInfo] = useState<{
+    fields: string[];
+    message: string;
+  } | null>(null);
+
   /** AIで下書きを生成 */
   const handleGenerate = async () => {
     setLoading(true);
     setContent("");
     setGenerated(false);
     setEditingDocId(null);
+    setMissingInfo(null);
 
     try {
       const res = await fetch("/api/documents/generate", {
@@ -77,15 +83,30 @@ export default function DocumentsPage() {
         body: JSON.stringify({ docType: selectedDocType }),
       });
 
-      if (!res.ok) {
-        const err: { error: string } = await res.json();
-        alert(err.error || "生成に失敗しました");
+      const data = await res.json() as {
+        content?: string;
+        document?: { id: string };
+        needsMoreInfo?: boolean;
+        missingFields?: string[];
+        message?: string;
+        error?: string;
+      };
+
+      // 不足情報がある場合
+      if (data.needsMoreInfo) {
+        setMissingInfo({
+          fields: data.missingFields ?? [],
+          message: data.message ?? "追加情報が必要です",
+        });
         return;
       }
 
-      const data: { content: string; document?: { id: string } } =
-        await res.json();
-      setContent(data.content);
+      if (!res.ok) {
+        alert(data.error || "生成に失敗しました");
+        return;
+      }
+
+      setContent(data.content ?? "");
       setGenerated(true);
       if (data.document?.id) {
         setEditingDocId(data.document.id);
@@ -240,6 +261,29 @@ export default function DocumentsPage() {
           ヒアリングで取得済みのプロフィール情報を元にAIが下書きを生成します。
         </p>
       </div>
+
+      {/* 不足情報の案内 */}
+      {missingInfo && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-6">
+          <h2 className="text-lg font-semibold text-amber-800 mb-2">
+            追加情報が必要です
+          </h2>
+          <p className="text-sm text-amber-700 mb-3">
+            書類を正確に作成するために、以下の情報をプロフィールに入力してください:
+          </p>
+          <ul className="list-disc list-inside text-sm text-amber-700 mb-4 space-y-1">
+            {missingInfo.fields.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+          <a
+            href="/profile"
+            className="inline-block px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+          >
+            プロフィールを入力する
+          </a>
+        </div>
+      )}
 
       {/* プレビュー・編集エリア */}
       {generated && (
