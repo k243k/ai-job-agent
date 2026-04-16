@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { sampleJobs } from "@/lib/sampleJobs";
 import type { ChatMessage } from "@/types/database";
 
 interface InterviewQuestion {
@@ -10,7 +9,16 @@ interface InterviewQuestion {
   tips: string;
 }
 
+interface JobOption {
+  id: string;
+  title: string;
+  company: string;
+  description: string;
+}
+
 export default function InterviewPage() {
+  const [jobs, setJobs] = useState<JobOption[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
   const [selectedJob, setSelectedJob] = useState("");
   const [questions, setQuestions] = useState<InterviewQuestion[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -26,8 +34,44 @@ export default function InterviewPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // 求人一覧APIから求人を取得
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        const res = await fetch("/api/jobs");
+        if (res.ok) {
+          const data = await res.json() as {
+            jobs: Array<{
+              id: string;
+              title: string;
+              company: string | null;
+              description: string | null;
+            }>;
+          };
+          setJobs(
+            data.jobs.map((j) => ({
+              id: j.id,
+              title: j.title,
+              company: j.company ?? "不明",
+              description: j.description ?? "",
+            }))
+          );
+        }
+      } catch {
+        console.error("求人一覧の取得に失敗");
+      } finally {
+        setLoadingJobs(false);
+      }
+    };
+    void fetchJobs();
+  }, []);
+
+  const getSelectedJobData = (): JobOption | undefined =>
+    jobs.find((j) => j.id === selectedJob);
+
   const fetchQuestions = async () => {
-    if (!selectedJob) return;
+    const job = getSelectedJobData();
+    if (!job) return;
     setLoadingQuestions(true);
     setQuestions([]);
 
@@ -35,7 +79,11 @@ export default function InterviewPage() {
       const res = await fetch("/api/interview/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: selectedJob }),
+        body: JSON.stringify({
+          jobTitle: job.title,
+          jobCompany: job.company,
+          jobDescription: job.description,
+        }),
       });
 
       if (!res.ok) throw new Error("取得失敗");
@@ -49,7 +97,7 @@ export default function InterviewPage() {
   };
 
   const startRoleplay = () => {
-    const job = sampleJobs.find((j) => j.id === selectedJob);
+    const job = getSelectedJobData();
     if (!job) return;
 
     setMode("roleplay");
@@ -65,7 +113,7 @@ export default function InterviewPage() {
     e.preventDefault();
     if (!input.trim() || loadingChat) return;
 
-    const job = sampleJobs.find((j) => j.id === selectedJob);
+    const job = getSelectedJobData();
     if (!job) return;
 
     const userMessage: ChatMessage = { role: "user", content: input.trim() };
@@ -108,28 +156,33 @@ export default function InterviewPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               求人を選択
             </label>
-            <select
-              value={selectedJob}
-              onChange={(e) => {
-                setSelectedJob(e.target.value);
-                setQuestions([]);
-                setMode("questions");
-                setMessages([]);
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">選択してください</option>
-              {sampleJobs.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.title} - {job.company}
-                </option>
-              ))}
-            </select>
+            {loadingJobs ? (
+              <p className="text-sm text-gray-500 py-2">求人を読み込み中...</p>
+            ) : (
+              <select
+                value={selectedJob}
+                onChange={(e) => {
+                  setSelectedJob(e.target.value);
+                  setQuestions([]);
+                  setMode("questions");
+                  setMessages([]);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">選択してください</option>
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.title} - {job.company}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <button
             onClick={fetchQuestions}
             disabled={!selectedJob || loadingQuestions}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            type="button"
           >
             {loadingQuestions ? "生成中..." : "想定質問を生成"}
           </button>
@@ -137,6 +190,7 @@ export default function InterviewPage() {
             onClick={startRoleplay}
             disabled={!selectedJob}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            type="button"
           >
             模擬面接を開始
           </button>

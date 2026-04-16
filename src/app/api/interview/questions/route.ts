@@ -14,11 +14,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
 
-    const body: { jobId: string } = await request.json();
-    const job = sampleJobs.find((j) => j.id === body.jobId);
+    const body: {
+      jobId?: string;
+      jobTitle?: string;
+      jobCompany?: string;
+      jobDescription?: string;
+    } = await request.json();
 
-    if (!job) {
-      return NextResponse.json({ error: "求人が見つかりません" }, { status: 404 });
+    // フロントから求人データが直接渡された場合はそれを使う
+    let jobTitle = body.jobTitle ?? "";
+    let jobCompany = body.jobCompany ?? "";
+    let jobDescription = body.jobDescription ?? "";
+
+    // jobIdのみの場合はsampleJobsから検索（後方互換）
+    if (!jobTitle && body.jobId) {
+      const job = sampleJobs.find((j) => j.id === body.jobId);
+      if (job) {
+        jobTitle = job.title;
+        jobCompany = job.company ?? "";
+        jobDescription = job.description ?? "";
+      }
+    }
+
+    if (!jobTitle) {
+      return NextResponse.json(
+        { error: "求人情報が必要です" },
+        { status: 400 }
+      );
     }
 
     const { data: profile } = await supabase
@@ -38,9 +60,9 @@ export async function POST(request: Request) {
           content: `以下の求人に対する面接で聞かれそうな質問を10個、日本語で生成してください。
 
 求人情報:
-- 職種: ${job.title}
-- 企業: ${job.company}
-- 詳細: ${job.description}
+- 職種: ${jobTitle}
+- 企業: ${jobCompany}
+- 詳細: ${jobDescription}
 
 求職者情報: ${profileInfo}
 
