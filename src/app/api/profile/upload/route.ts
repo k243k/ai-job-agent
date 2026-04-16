@@ -12,13 +12,37 @@ const ALLOWED_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 
-const PARSE_PROMPT = `以下は履歴書または職務経歴書のテキストです。この内容から以下の情報を抽出してJSON形式で出力してください:
-{"profile":{"age":数値またはnull,"skills":["スキル1","スキル2"],"experience_years":数値,"desired_salary":"希望年収またはnull","desired_location":"勤務地またはnull","desired_role":"職種またはnull","values":"価値観またはnull"}}
+const PARSE_PROMPT = `以下は履歴書または職務経歴書のテキストです。この内容からプロフィール情報を抽出してJSON形式で出力してください。
+
+出力形式:
+{"profile":{
+  "lastName":"姓",
+  "firstName":"名",
+  "lastNameKana":"姓フリガナ",
+  "firstNameKana":"名フリガナ",
+  "age":数値またはnull,
+  "gender":"性別またはnull",
+  "email":"メールアドレスまたはnull",
+  "phone":"電話番号またはnull",
+  "postalCode":"郵便番号またはnull",
+  "address":"住所またはnull",
+  "nearestStation":"最寄り駅またはnull",
+  "education":[{"period":"卒業年月","school":"学校名 学部 卒業/入学"}],
+  "workHistory":[{"period":"入社〜退社","company":"会社名","department":"部署またはnull","description":"業務内容"}],
+  "skills":["スキル1","スキル2"],
+  "experience_years":数値,
+  "desired_salary":"希望年収またはnull",
+  "desired_location":"勤務地またはnull",
+  "desired_role":"職種またはnull",
+  "values":"志望動機・価値観またはnull"
+}}
 
 重要:
 - JSONのみを出力してください。説明文は不要です。
 - 情報が見つからない項目はnullにしてください。
-- skillsは必ず配列にしてください。
+- skillsは必ず配列にしてください。プログラミング言語や資格を含めてください。
+- educationとworkHistoryは必ず配列にしてください。
+- 志望動機や自己PRの内容はvaluesに入れてください。
 
 テキスト:
 `;
@@ -208,6 +232,25 @@ export async function PUT(request: Request) {
       );
     }
 
+    // 拡張データ（氏名/住所/学歴/職歴）をraw_conversationに格納
+    const extendedData: Record<string, unknown> = {
+      lastName: (profile as Record<string, unknown>).lastName ?? "",
+      firstName: (profile as Record<string, unknown>).firstName ?? "",
+      lastNameKana: (profile as Record<string, unknown>).lastNameKana ?? "",
+      firstNameKana: (profile as Record<string, unknown>).firstNameKana ?? "",
+      fullName: `${(profile as Record<string, unknown>).lastName ?? ""} ${(profile as Record<string, unknown>).firstName ?? ""}`.trim(),
+      furigana: `${(profile as Record<string, unknown>).lastNameKana ?? ""} ${(profile as Record<string, unknown>).firstNameKana ?? ""}`.trim(),
+      gender: (profile as Record<string, unknown>).gender ?? "",
+      email: (profile as Record<string, unknown>).email ?? "",
+      phone: (profile as Record<string, unknown>).phone ?? "",
+      postalCode: (profile as Record<string, unknown>).postalCode ?? "",
+      address: (profile as Record<string, unknown>).address ?? "",
+      nearestStation: (profile as Record<string, unknown>).nearestStation ?? "",
+      education: (profile as Record<string, unknown>).education ?? [],
+      workHistory: (profile as Record<string, unknown>).workHistory ?? [],
+      source: "resume_upload",
+    };
+
     const { error: upsertError } = await supabase.from("profiles").upsert({
       id: user.id,
       age: profile.age ?? null,
@@ -217,7 +260,7 @@ export async function PUT(request: Request) {
       desired_location: profile.desired_location ?? null,
       desired_role: profile.desired_role ?? null,
       values: profile.values ?? null,
-      raw_conversation: JSON.parse(JSON.stringify({ source: "resume_upload" })) as Json,
+      raw_conversation: extendedData as unknown as Json,
       updated_at: new Date().toISOString(),
     });
 

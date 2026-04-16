@@ -7,13 +7,24 @@ import type { ProfileData } from "@/types/database";
 type UploadState = "idle" | "uploading" | "parsed" | "saving" | "saved" | "error";
 
 const FIELD_LABELS: Record<string, string> = {
+  lastName: "姓",
+  firstName: "名",
+  lastNameKana: "セイ",
+  firstNameKana: "メイ",
   age: "年齢",
-  skills: "スキル",
+  gender: "性別",
+  phone: "電話番号",
+  email: "メール",
+  postalCode: "郵便番号",
+  address: "住所",
+  education: "学歴",
+  workHistory: "職歴",
+  skills: "スキル・資格",
   experience_years: "経験年数",
   desired_salary: "希望年収",
   desired_location: "希望勤務地",
   desired_role: "希望職種",
-  values: "価値観",
+  values: "志望動機・価値観",
 };
 
 export default function ProfileUploadPage() {
@@ -141,7 +152,23 @@ export default function ProfileUploadPage() {
 
   const renderProfileValue = (key: string, value: unknown): string => {
     if (value === null || value === undefined) return "-- (未検出)";
-    if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "-- (未検出)";
+    if (Array.isArray(value)) {
+      if (value.length === 0) return "-- (未検出)";
+      // education/workHistory は配列オブジェクト
+      if (key === "education") {
+        return value
+          .map((e: Record<string, string>) => `${e.period ?? ""} ${e.school ?? ""}`.trim())
+          .join(" / ");
+      }
+      if (key === "workHistory") {
+        return value
+          .map((w: Record<string, string>) =>
+            `${w.period ?? ""} ${w.company ?? ""} ${w.department ?? ""}`.trim()
+          )
+          .join(" / ");
+      }
+      return value.join(", ");
+    }
     if (typeof value === "number") {
       if (key === "experience_years") return `${value}年`;
       if (key === "age") return `${value}歳`;
