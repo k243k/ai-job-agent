@@ -252,8 +252,9 @@ export default function ProfilePage() {
     try {
       const res = await fetch("/api/profile");
       if (!res.ok) return;
+      // APIレスポンスはraw_conversationをフラット化済み
       const data: {
-        profile: {
+        profile: (ExtendedProfileData & {
           age: number | null;
           skills: string[];
           experience_years: number | null;
@@ -261,19 +262,17 @@ export default function ProfilePage() {
           desired_location: string | null;
           desired_role: string | null;
           values: string | null;
-          raw_conversation: unknown;
-        } | null;
+        }) | null;
       } = await res.json();
       if (!data.profile) return;
 
       const p = data.profile;
-      const ext = (p.raw_conversation ?? {}) as ExtendedProfileData;
 
-      // 後方互換: 旧データの fullName/furigana からスペース区切りで姓名分割を試みる
-      const fallbackLastName = ext.lastName ?? (ext.fullName ? ext.fullName.split(/\s+/)[0] : "") ?? "";
-      const fallbackFirstName = ext.firstName ?? (ext.fullName ? ext.fullName.split(/\s+/).slice(1).join(" ") : "") ?? "";
-      const fallbackLastNameKana = ext.lastNameKana ?? (ext.furigana ? ext.furigana.split(/\s+/)[0] : "") ?? "";
-      const fallbackFirstNameKana = ext.firstNameKana ?? (ext.furigana ? ext.furigana.split(/\s+/).slice(1).join(" ") : "") ?? "";
+      // 後方互換: fullName/furigana からスペース区切りで姓名分割を試みる
+      const fallbackLastName = p.lastName ?? (p.fullName ? p.fullName.split(/\s+/)[0] : "") ?? "";
+      const fallbackFirstName = p.firstName ?? (p.fullName ? p.fullName.split(/\s+/).slice(1).join(" ") : "") ?? "";
+      const fallbackLastNameKana = p.lastNameKana ?? (p.furigana ? p.furigana.split(/\s+/)[0] : "") ?? "";
+      const fallbackFirstNameKana = p.firstNameKana ?? (p.furigana ? p.furigana.split(/\s+/).slice(1).join(" ") : "") ?? "";
 
       setForm({
         lastName: fallbackLastName,
@@ -281,19 +280,19 @@ export default function ProfilePage() {
         lastNameKana: fallbackLastNameKana,
         firstNameKana: fallbackFirstNameKana,
         age: p.age != null ? String(p.age) : "",
-        gender: ext.gender ?? "",
-        email: ext.email ?? "",
-        phone: ext.phone ?? "",
-        postalCode: ext.postalCode ?? "",
-        address: ext.address ?? "",
-        nearestStation: ext.nearestStation ?? "",
+        gender: p.gender ?? "",
+        email: p.email ?? "",
+        phone: p.phone ?? "",
+        postalCode: p.postalCode ?? "",
+        address: p.address ?? "",
+        nearestStation: p.nearestStation ?? "",
         education:
-          ext.education && ext.education.length > 0
-            ? ext.education
+          p.education && p.education.length > 0
+            ? p.education
             : [{ period: "", school: "" }],
         workHistory:
-          ext.workHistory && ext.workHistory.length > 0
-            ? ext.workHistory
+          p.workHistory && p.workHistory.length > 0
+            ? p.workHistory
             : [{ period: "", company: "", department: "", description: "" }],
         skills: Array.isArray(p.skills) ? p.skills.join(", ") : "",
         desiredSalary: p.desired_salary ?? "",

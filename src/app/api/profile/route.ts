@@ -39,8 +39,38 @@ export async function GET() {
       return NextResponse.json({ profile: null });
     }
 
-    // レスポンスからUUIDを除外（クライアントに返す必要なし）
-    const { id: _id, ...safeProfile } = profile;
+    // raw_conversationからフォーム用フィールドだけ抽出してフラット化
+    const ext = (typeof profile.raw_conversation === "object" && profile.raw_conversation !== null && !Array.isArray(profile.raw_conversation))
+      ? profile.raw_conversation as Record<string, unknown>
+      : {};
+
+    // id, raw_conversation, created_at を除外。フォームに必要なフィールドのみ返す
+    const safeProfile = {
+      age: profile.age,
+      skills: profile.skills,
+      experience_years: profile.experience_years,
+      desired_salary: profile.desired_salary,
+      desired_location: profile.desired_location,
+      desired_role: profile.desired_role,
+      values: profile.values,
+      updated_at: profile.updated_at,
+      // raw_conversationの中身をフラット化して必要分だけ
+      lastName: ext.lastName ?? "",
+      firstName: ext.firstName ?? "",
+      lastNameKana: ext.lastNameKana ?? "",
+      firstNameKana: ext.firstNameKana ?? "",
+      fullName: ext.fullName ?? "",
+      furigana: ext.furigana ?? "",
+      gender: ext.gender ?? "",
+      email: ext.email ?? "",
+      phone: ext.phone ?? "",
+      postalCode: ext.postalCode ?? "",
+      address: ext.address ?? "",
+      nearestStation: ext.nearestStation ?? "",
+      education: Array.isArray(ext.education) ? ext.education : [],
+      workHistory: Array.isArray(ext.workHistory) ? ext.workHistory : [],
+    };
+
     return NextResponse.json({ profile: safeProfile });
   } catch (error) {
     console.error("Profile GET error:", error);
