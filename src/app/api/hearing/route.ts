@@ -47,12 +47,30 @@ function extractProfile(text: string): ProfileData | null {
 
 export async function POST(request: Request) {
   try {
+    // 認証チェック
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+    }
+
     const body: { messages: ChatMessage[] } = await request.json();
     const { messages } = body;
 
-    if (!messages || !Array.isArray(messages)) {
+    if (!messages || !Array.isArray(messages) || messages.length > 20) {
       return NextResponse.json(
-        { error: "メッセージが必要です" },
+        { error: "メッセージが不正です" },
+        { status: 400 }
+      );
+    }
+
+    // 入力長制限（プロンプトインジェクション緩和）
+    const totalLength = messages.reduce((sum, m) => sum + m.content.length, 0);
+    if (totalLength > 10000) {
+      return NextResponse.json(
+        { error: "メッセージが長すぎます" },
         { status: 400 }
       );
     }

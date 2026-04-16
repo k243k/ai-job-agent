@@ -146,6 +146,25 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // magic bytes検証（MIME偽装防止）
+    if (file.type === "application/pdf") {
+      const header = buffer.subarray(0, 5).toString("ascii");
+      if (header !== "%PDF-") {
+        return NextResponse.json(
+          { error: "有効なPDFファイルではありません" },
+          { status: 400 }
+        );
+      }
+    } else {
+      // docxはZIP形式（PK header）
+      if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+        return NextResponse.json(
+          { error: "有効なdocxファイルではありません" },
+          { status: 400 }
+        );
+      }
+    }
+
     // テキスト抽出
     let extractedText: string;
     try {
@@ -184,18 +203,12 @@ export async function POST(request: Request) {
 
     if (!profile) {
       return NextResponse.json(
-        {
-          error: "履歴書の解析に失敗しました。再度お試しください。",
-          rawText: extractedText.slice(0, 500),
-        },
+        { error: "履歴書の解析に失敗しました。再度お試しください。" },
         { status: 422 }
       );
     }
 
-    return NextResponse.json({
-      profile,
-      extractedTextPreview: extractedText.slice(0, 300),
-    });
+    return NextResponse.json({ profile });
   } catch (error) {
     console.error("Profile upload API error:", error);
     return NextResponse.json(

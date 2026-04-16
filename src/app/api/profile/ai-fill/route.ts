@@ -92,12 +92,31 @@ function extractProfileData(text: string): AiProfileData | null {
 
 export async function POST(request: Request): Promise<NextResponse<AiFillResponse | { error: string }>> {
   try {
+    // 認証チェック
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+    }
+
     const body: { messages: ChatMessage[] } = await request.json();
     const { messages } = body;
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    if (!messages || !Array.isArray(messages) || messages.length === 0 || messages.length > 20) {
       return NextResponse.json(
-        { error: "メッセージが必要です" },
+        { error: "メッセージが不正です" },
+        { status: 400 },
+      );
+    }
+
+    // 入力長制限
+    const totalLength = messages.reduce((sum, m) => sum + m.content.length, 0);
+    if (totalLength > 10000) {
+      return NextResponse.json(
+        { error: "メッセージが長すぎます" },
         { status: 400 },
       );
     }

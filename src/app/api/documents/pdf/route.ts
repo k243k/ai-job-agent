@@ -59,6 +59,16 @@ function validateCvData(body: unknown): body is CvData {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    // 認証チェック
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+    }
+
     const body: unknown = await request.json();
 
     if (typeof body !== "object" || body === null) {
